@@ -9,11 +9,20 @@
 #import "MyScene.h"
 #import <Box2D.h>
 
-#define BOX2D
-#define NUM_BOXES 5
+//#define BOX2D
+#define NUM_BOXES (200)
 #define PIXELS_PER_METER (150)
 #define BOX_WIDTH (20)
 #define BOX_HEIGHT (BOX_WIDTH / 2)
+#define ANGULAR_VELOCITY (25)
+#define ANGULAR_DAMPING (0.1)
+#define DENSITY (1.0)
+#define FRICTION (0.2)
+#define RESTITUTION (0.2)
+#define GRAVITY (-4.5)
+#define MOV_AVG_COUNT (10)
+#define FIRST_SAMPLE_POINT (0.5)
+#define SECOND_SAMPLE_POINT (10.0)
 
 @implementation MyScene {
     b2World *world;
@@ -22,12 +31,14 @@
     double prevTime;
     int frameCount;
     double frameTimeTotal;
+    double frameRate[MOV_AVG_COUNT];
     float g;
+    BOOL frameRateDisplayed;
 }
 
 -(void)addBoxes {
     float xStart = BOX_WIDTH;
-    float yStart = self.size.height-BOX_HEIGHT;
+    float yStart = self.size.height-BOX_HEIGHT - 30;
     
     for(int i = 0;i<NUM_BOXES;i++) {
         float x = (i % 15) * BOX_WIDTH + xStart;
@@ -45,7 +56,8 @@
         prevTime = -1;
         frameCount = 0;
         frameTimeTotal = 0;
-        g = -4.5;
+        g = GRAVITY;
+        frameRateDisplayed = NO;
         
 #ifdef BOX2D
         NSLog(@"Box2D - %d boxes", NUM_BOXES);
@@ -114,8 +126,8 @@
     
     bodyDef.type = type;
     
-    bodyDef.linearDamping = 0.1;
-    bodyDef.angularDamping = 0.1;
+    bodyDef.linearDamping = 0;
+    bodyDef.angularDamping = 0;
     bodyDef.allowSleep = true;
     bodyDef.awake = true;
     
@@ -129,14 +141,9 @@
     polyShape.SetAsBox(rock.size.width / 2.0 / PIXELS_PER_METER, rock.size.height / 2.0 / PIXELS_PER_METER);
     fixtureDef.shape = &polyShape;
     
-        
-    float density = 1.0;
-    float friction = 0.2;
-    float restitution = 0.2;
-    
-    fixtureDef.density = density;
-    fixtureDef.friction = friction;
-    fixtureDef.restitution = restitution;
+    fixtureDef.density = DENSITY;
+    fixtureDef.friction = FRICTION;
+    fixtureDef.restitution = RESTITUTION;
     fixtureDef.isSensor = 0;
     
     body->CreateFixture(&fixtureDef);
@@ -144,11 +151,17 @@
     body->SetUserData((__bridge void*)rock);
     
     //body->SetAngularVelocity(6.28);
-    body->SetAngularVelocity(12.5);
+    body->SetAngularVelocity(ANGULAR_VELOCITY);
+    body->SetAngularDamping(ANGULAR_DAMPING);
     
 #else
     rock.physicsBody = [SKPhysicsBody bodyWithRectangleOfSize:rock.size];
-    rock.physicsBody.angularVelocity = 12.5;
+    rock.physicsBody.angularVelocity = ANGULAR_VELOCITY;
+    rock.physicsBody.angularDamping = ANGULAR_DAMPING;
+    rock.physicsBody.restitution = RESTITUTION;
+    rock.physicsBody.density = DENSITY;
+    rock.physicsBody.friction = FRICTION;
+    
 #endif
     
     [self addChild:rock];
@@ -240,13 +253,28 @@ void updatePhysics(double deltaT, double &accumulator, double timeStep, b2World 
         #ifdef BOX2D
         updatePhysics(deltaT, accumulator, timeStep, world);
         #endif
-        frameTimeTotal += deltaT;
+        /*frameTimeTotal += deltaT;
+        
+        frameRate[frameCount] = 1.0 / deltaT;
+        
         frameCount++;
         
-        if (frameCount % 101 == 0) {
-            double avgFrameTime = frameTimeTotal / (double)frameCount;
-            NSLog(@"Average frame time = %f", avgFrameTime);
-        }
+        if (frameCount == MOV_AVG_COUNT) {
+            double avgFrameRate = 0;
+            for(int i=0;i<frameCount;i++){
+                avgFrameRate += frameRate[i];
+            }
+            avgFrameRate = avgFrameRate / frameCount;
+            
+            if ((frameTimeTotal > FIRST_SAMPLE_POINT && frameTimeTotal < SECOND_SAMPLE_POINT && !frameRateDisplayed) || (frameTimeTotal > SECOND_SAMPLE_POINT && frameRateDisplayed)) {
+                NSLog(@"Frame rate = %f", avgFrameRate);
+                frameRateDisplayed = !frameRateDisplayed;
+            }
+            
+            
+            
+            frameCount = 0;
+        }*/
     }
     
     
