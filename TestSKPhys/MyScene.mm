@@ -10,28 +10,34 @@
 #import <Box2D.h>
 
 #define BOX2D
-#define NUM_BOXES (150)
+#define NUM_BOXES (400)
 #define PIXELS_PER_METER (150)
 #define SMALL_BOX_WIDTH (16)
 #define BIG_BOX_WIDTH (32)
 #define SMALL_BOX_HEIGHT (SMALL_BOX_WIDTH / 2)
 #define BIG_BOX_HEIGHT (BIG_BOX_WIDTH / 2)
-#define ANGULAR_VELOCITY (25)
+#define ANGULAR_VELOCITY (100)
 #define ANGULAR_DAMPING (0)
 #define LINEAR_DAMPING (0)
 #define DENSITY (1.0)
 #define FRICTION (0.1)
 #define RESTITUTION (0.1)
 #define GRAVITY (-1.5)
+#define MOV_AVG_COUNT (10)
+#define FIRST_SAMPLE_POINT (0.5)
+#define SECOND_SAMPLE_POINT (10.0)
 
-float boxWidth = BIG_BOX_WIDTH;
-float boxHeight = BIG_BOX_HEIGHT;
+float boxWidth = SMALL_BOX_WIDTH;
+float boxHeight = SMALL_BOX_HEIGHT;
 
 @implementation MyScene {
     b2World *world;
     double accumulator;
     double timeStep;
     double prevTime;
+    int frameCount;
+    double frameTimeTotal;
+    double frameRate[MOV_AVG_COUNT];
     float g;
     BOOL frameRateDisplayed;
 }
@@ -42,6 +48,8 @@ float boxHeight = BIG_BOX_HEIGHT;
         timeStep = 1.0 / 60.0;
         accumulator = 0;
         prevTime = -1;
+        frameCount = 0;
+        frameTimeTotal = 0;
         g = GRAVITY;
         frameRateDisplayed = NO;
         
@@ -175,6 +183,9 @@ float boxHeight = BIG_BOX_HEIGHT;
 void updatePhysics(double deltaT, double &accumulator, double timeStep, b2World *world) {
     int velocityIterations = 8;
     int positionIterations = 3;
+    //int velocityIterations = 10;
+    //int positionIterations = 10;
+    
     
     if (deltaT > 0.25) {
         deltaT = 0.25;// note: max frame time to avoid spiral of death
@@ -198,6 +209,8 @@ void updatePhysics(double deltaT, double &accumulator, double timeStep, b2World 
                 
                 sprite.zRotation = angle;
                 
+                
+                //GemLog(@"(x,y,theta) = (%4.2f, %4.2f, %4.2f)\n", position.x, position.y, angle);
             }
            
             
@@ -221,6 +234,8 @@ void updatePhysics(double deltaT, double &accumulator, double timeStep, b2World 
                                   (position.y * PIXELS_PER_METER + (1.0 - alpha)*sprite.position.y/PIXELS_PER_METER));
         sprite.position = pos;
         
+        //NSLog(@"x = %f   y = %f", pos.x, pos.y);
+        
         float32 angle = b->GetAngle();
         sprite.zRotation = alpha * angle + (1.0-alpha)*sprite.zRotation;
        
@@ -237,7 +252,7 @@ void updatePhysics(double deltaT, double &accumulator, double timeStep, b2World 
 
 
 -(void)update:(CFTimeInterval)currentTime {
-
+    
     /* Called before each frame is rendered */
     if (prevTime == -1) {
         prevTime = currentTime;
@@ -247,11 +262,62 @@ void updatePhysics(double deltaT, double &accumulator, double timeStep, b2World 
     if (deltaT > 0) {
         #ifdef BOX2D
         updatePhysics(deltaT, accumulator, timeStep, world);
-        #endif
         
+        BOOL allSleeping = YES;
+        for (b2Body* b = world->GetBodyList(); b; b = b->GetNext()) {
+            if (b->IsAwake()) {
+                allSleeping = NO;
+            }
+        }
+        
+        if (allSleeping) {
+            NSLog(@"All boxes are sleeping");
+        }
+        
+        #else
+        
+        NSArray *children = self.children;
+        BOOL allResting = YES;
+        for (int i=0;i < [children count]; i++) {
+            SKSpriteNode *box = [children objectAtIndex:i];
+            SKPhysicsBody *body = box.physicsBody;
+            if ( !body.resting) {
+                allResting = NO;
+            }
+        }
+        if (allResting) {
+            NSLog(@"All boxes are resting");
+        }
+
+        
+        #endif
+        /*frameTimeTotal += deltaT;
+        
+        frameRate[frameCount] = 1.0 / deltaT;
+        
+        frameCount++;
+        
+        if (frameCount == MOV_AVG_COUNT) {
+            double avgFrameRate = 0;
+            for(int i=0;i<frameCount;i++){
+                avgFrameRate += frameRate[i];
+            }
+            avgFrameRate = avgFrameRate / frameCount;
+            
+            if ((frameTimeTotal > FIRST_SAMPLE_POINT && frameTimeTotal < SECOND_SAMPLE_POINT && !frameRateDisplayed) || (frameTimeTotal > SECOND_SAMPLE_POINT && frameRateDisplayed)) {
+                NSLog(@"Frame rate = %f", avgFrameRate);
+                frameRateDisplayed = !frameRateDisplayed;
+            }
+            
+            
+            
+            frameCount = 0;
+        }*/
     }
     
+    
     prevTime = currentTime;
+
     
 }
 
