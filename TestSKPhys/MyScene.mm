@@ -10,7 +10,7 @@
 #import <Box2D.h>
 
 #define BOX2D
-#define NUM_BOXES (400)
+#define NUM_BOXES (50)
 #define PIXELS_PER_METER (150)
 #define SMALL_BOX_WIDTH (16)
 #define BIG_BOX_WIDTH (32)
@@ -20,12 +20,10 @@
 #define ANGULAR_DAMPING (0)
 #define LINEAR_DAMPING (0)
 #define DENSITY (1.0)
-#define FRICTION (0.1)
-#define RESTITUTION (0.1)
-#define GRAVITY (-1.5)
-#define MOV_AVG_COUNT (10)
-#define FIRST_SAMPLE_POINT (0.5)
-#define SECOND_SAMPLE_POINT (10.0)
+#define FRICTION (0)
+#define RESTITUTION (1.0)
+#define GRAVITY (0)
+#define EPSILON (0.05)
 
 float boxWidth = SMALL_BOX_WIDTH;
 float boxHeight = SMALL_BOX_HEIGHT;
@@ -36,10 +34,12 @@ float boxHeight = SMALL_BOX_HEIGHT;
     double timeStep;
     double prevTime;
     int frameCount;
-    double frameTimeTotal;
-    double frameRate[MOV_AVG_COUNT];
     float g;
     BOOL frameRateDisplayed;
+    double physicsStartTime;
+    double physicsEndTime;
+    double simualtionTime;
+    double sampleStartTime;
 }
 
 -(id)initWithSize:(CGSize)size {    
@@ -49,12 +49,14 @@ float boxHeight = SMALL_BOX_HEIGHT;
         accumulator = 0;
         prevTime = -1;
         frameCount = 0;
-        frameTimeTotal = 0;
         g = GRAVITY;
         frameRateDisplayed = NO;
+        physicsStartTime = 0;
+        physicsEndTime = 0;
+        sampleStartTime = 0;
         
 #ifdef BOX2D
-        NSLog(@"Box2D - %d boxes", NUM_BOXES);
+        NSLog(@"Box2D Elastic - %d boxes", NUM_BOXES);
         
         b2Vec2 gravity(0.0f, g);
         bool doSleep = true;
@@ -83,7 +85,7 @@ float boxHeight = SMALL_BOX_HEIGHT;
         b2Body *boundary = world->CreateBody(&boundaryDef);
         boundary->CreateFixture(&chain, 0);
 #else
-        NSLog(@"SKPhysics - %d boxes", NUM_BOXES);
+        NSLog(@"SKPhysics Elastic - %d boxes", NUM_BOXES);
         self.physicsBody = [SKPhysicsBody bodyWithEdgeLoopFromRect:self.frame];
         self.physicsWorld.gravity = CGVectorMake(0, g);
 #endif
@@ -249,76 +251,65 @@ void updatePhysics(double deltaT, double &accumulator, double timeStep, b2World 
     
 }
 
+#ifndef BOX2D
+-(void)didEvaluateActions {
+    physicsStartTime = [NSDate timeIntervalSinceReferenceDate];
+    if (sampleStartTime == 0) {
+        sampleStartTime = physicsStartTime;
+    }
+}
 
+-(void)didSimulatePhysics {
+    physicsEndTime = [NSDate timeIntervalSinceReferenceDate];
+    frameCount++;
+    
+    simualtionTime += (physicsEndTime - physicsStartTime);
+    if (physicsEndTime - sampleStartTime > 1.0 - EPSILON) {
+        NSLog(@"Average simulation time = %f", (simualtionTime / (double)frameCount));
+        simualtionTime = 0;
+        sampleStartTime = 0;
+        frameCount = 0;
+    }
+    
+}
+
+#else
 
 -(void)update:(CFTimeInterval)currentTime {
     
+
     /* Called before each frame is rendered */
     if (prevTime == -1) {
         prevTime = currentTime;
     }
     double deltaT = currentTime - prevTime;
-    //NSLog (@"deltaT = %f", deltaT);
+    
     if (deltaT > 0) {
-        #ifdef BOX2D
+        
+        physicsStartTime = [NSDate timeIntervalSinceReferenceDate];
+        if (sampleStartTime == 0) {
+            sampleStartTime = physicsStartTime;
+        }
         updatePhysics(deltaT, accumulator, timeStep, world);
-        
-        BOOL allSleeping = YES;
-        for (b2Body* b = world->GetBodyList(); b; b = b->GetNext()) {
-            if (b->IsAwake()) {
-                allSleeping = NO;
-            }
-        }
-        
-        if (allSleeping) {
-            NSLog(@"All boxes are sleeping");
-        }
-        
-        #else
-        
-        NSArray *children = self.children;
-        BOOL allResting = YES;
-        for (int i=0;i < [children count]; i++) {
-            SKSpriteNode *box = [children objectAtIndex:i];
-            SKPhysicsBody *body = box.physicsBody;
-            if ( !body.resting) {
-                allResting = NO;
-            }
-        }
-        if (allResting) {
-            NSLog(@"All boxes are resting");
-        }
-
-        
-        #endif
-        /*frameTimeTotal += deltaT;
-        
-        frameRate[frameCount] = 1.0 / deltaT;
-        
+        physicsEndTime = [NSDate timeIntervalSinceReferenceDate];
         frameCount++;
         
-        if (frameCount == MOV_AVG_COUNT) {
-            double avgFrameRate = 0;
-            for(int i=0;i<frameCount;i++){
-                avgFrameRate += frameRate[i];
-            }
-            avgFrameRate = avgFrameRate / frameCount;
-            
-            if ((frameTimeTotal > FIRST_SAMPLE_POINT && frameTimeTotal < SECOND_SAMPLE_POINT && !frameRateDisplayed) || (frameTimeTotal > SECOND_SAMPLE_POINT && frameRateDisplayed)) {
-                NSLog(@"Frame rate = %f", avgFrameRate);
-                frameRateDisplayed = !frameRateDisplayed;
-            }
-            
-            
-            
+        simualtionTime += (physicsEndTime - physicsStartTime);
+        if (physicsEndTime - sampleStartTime > 1.0 - EPSILON) {
+            NSLog(@"Average simulation time = %f", (simualtionTime / (double)frameCount));
+            simualtionTime = 0;
+            sampleStartTime = 0;
             frameCount = 0;
-        }*/
+        }
+        
     }
     
     
     prevTime = currentTime;
 
-    
+
 }
+
+#endif
 
 @end
